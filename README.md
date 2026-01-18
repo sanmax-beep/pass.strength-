@@ -11,3 +11,9 @@ A simple password strength analyzer for Termux and Linux.
 ## Usage
 ```bash
 pass.strength
+
+git clone https://github.com/sanmax-beep/pass.strength-.git
+cd pass.strength-
+chmod +x pass.strength
+cp pass.strength $PREFIX/bin/
+pass.strength
