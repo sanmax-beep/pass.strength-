@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""
+PASSGUARD v3.0 - Sanjay.Ks
+Standalone Password Strength Analyzer
+No external dependencies except standard Python libs
+"""
+
+import re
+import math
+import getpass
+import secrets
+import string
+import sys
+import os
+
+# ANSI color codes (no external libs needed)
+class Colors:
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    WHITE = '\033[97m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
+
+def print_banner():
+    banner = f"""{Colors.RED}{Colors.BOLD}
+ ██████╗  ██████╗ ██████╗ █████╗ 
+██╔═══██╗██╔════╝ ██╔══██╗██╔══██╗
+██║   ██║██║  ███╗██████╔╝███████║
+██║   ██║██║   ██║██╔═══╝ ██╔══██║
+╚██████╔╝╚██████╔╝██║     ██║  ██║
+ ╚═════╝  ╚═════╝ ╚═╝     ╚═╝  ╚═╝
+{Colors.END}
+
+{Colors.CYAN}{Colors.BOLD}                       PASSGUARD v3.0 - Sanjay.Ks
+{Colors.END}{Colors.WHITE}                 Professional Password Auditor{Colors.END}
+"""
+    print(banner)
+
+def calculate_entropy(password):
+    charset_size = sum([
+        26 if re.search(r'[a-z]', password) else 0,
+        26 if re.search(r'[A-Z]', password) else 0,
+        10 if re.search(r'\d', password) else 0,
+        33 if re.search(r'[!@#$%^&*()_+\-=\[\]{}|;:,.<>?~`\'\"\\\\]', password) else 0
+    ])
+    return len(password) * math.log2(max(charset_size, 1)) if password else 0
+
+def detect_weaknesses(password):
+    weaknesses = []
+    
+    common_passwords = {
+        'password', '123456', 'admin', 'qwerty', '123456789', 'letmein',
+        'welcome', 'monkey', 'dragon', 'master', 'abc123', 'password1'
+    }
+    
+    if any(pw in password.lower() for pw in common_passwords):
+        weaknesses.append("📖 COMMON WORD")
+    
+    keyboard_walks = [r'qwert', r'asdf', r'zxcv', r'1234']
+    if any(re.search(walk, password.lower()) for walk in keyboard_walks):
+        weaknesses.append("⌨️ KEYBOARD WALK")
+    
+    if re.search(r'(.)\1{2,}', password):
+        weaknesses.append("🔄 REPETITION")
+    
+    return weaknesses
+
+def generate_secure_password(length=16):
+    chars = string.ascii_letters + string.digits + "!@#$%^&*()_+-=[]{}|;:,.<>?~"
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+def check_password_strength(password):
+    length = len(password)
+    total_points = 10
+    score = 0
+    feedback = []
+    
+    tests = [
+        (length >= 16, 3, "16+ chars"),
+        (length >= 12, 2, "12+ chars"),
+        (re.search(r'[A-Z]', password), 1, "UPPER"),
+        (re.search(r'[a-z]', password), 1, "lower"),
+        (re.search(r'\d', password), 1, "DIGITS"),
+        (re.search(r'[!@#$%^&*()_+]', password), 1, "SYMBOLS"),
+        (len(set(password)) > length * 0.7, 1, "UNIQUE")
+    ]
+    
+    for passed, points, desc in tests:
+        if passed:
+            score += points
+        else:
+            feedback.append(desc)
+    
+    weaknesses = detect_weaknesses(password)
+    score -= len(weaknesses)
+    
+    percentage = max(0, min(100, int((score / total_points) * 100)))
+    
+    if percentage >= 90: status, color = "ELITE", Colors.GREEN
+    elif percentage >= 75: status, color = "STRONG", Colors.GREEN
+    elif percentage >= 50: status, color = "FAIR", Colors.YELLOW
+    elif percentage >= 25: status, color = "WEAK", Colors.RED
+    else: status, color = "CRITICAL", Colors.RED
+    
+    entropy = calculate_entropy(password)
+    crack_time = ["INSTANT", "MINUTES", "HOURS", "DAYS", "YEARS", "EONS"][min(int(entropy//25), 5)]
+    
+    return status, percentage, round(entropy, 1), crack_time, feedback, weaknesses, color
+
+def print_colored(text, color):
+    print(f"{color}{Colors.BOLD}{text}{Colors.END}")
+
+def main():
+    print_banner()
+    
+    try:
+        while True:
+            sys.stdout.write(f"{Colors.CYAN}{Colors.BOLD}$ passguard> {Colors.END}")
+            sys.stdout.flush()
+            password = getpass.getpass('')
+            
+            if not password:
+                print_colored("[-] Empty input", Colors.YELLOW)
+                continue
+            
+            print(f"{Colors.CYAN}═{'═' * 53}{Colors.END}")
+            print_colored("PASSWORD STRENGTH ANALYSIS", Colors.CYAN)
+            print(f"{Colors.CYAN}═{'═' * 53}{Colors.END}")
+            
+            status, percentage, entropy, crack_time, fixes, vulns, color = check_password_strength(password)
+            
+            # Percentage first and largest
+            print_colored(f"STRENGTH: {percentage}%", color)
+            print_colored(f"STATUS:  {status}", color)
+            print(f"{Colors.WHITE}ENTROPY: {entropy} bits{Colors.END}")
+            print_colored(f"CRACK:   {crack_time}", color)
+            
+            if vulns:
+                print(f"\n{Colors.RED}{Colors.BOLD}⚠️ VULNERABILITIES ({len(vulns)}):{Colors.END}")
+                for v in vulns:
+                    print(f"{Colors.RED}  • {v}{Colors.END}")
+            
+            if fixes:
+                print(f"\n{Colors.YELLOW}🔧 FIX:{Colors.END}")
+                for f in fixes:
+                    print(f"{Colors.YELLOW}  • {f}{Colors.END}")
+            
+            print_colored(f"\n💡 EXAMPLE: {generate_secure_password()}", Colors.GREEN)
+            print(f"{Colors.CYAN}═{'═' * 53}{Colors.END}\n")
+            
+    except KeyboardInterrupt:
+        print(f"\n{Colors.CYAN}[+] Exit{Colors.END}")
+    except EOFError:
+        pass
+
+if __name__ == "__main__":
+    # Self-contained - no pip, no github, no external deps
+    main()
